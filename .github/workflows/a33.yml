@@ -117,6 +117,7 @@ jobs:
           convert aosp_thumbnail.jpg -resize 320x320 -quality 80 -format jpg aosp_thumbnail.jpg
           identify aosp_thumbnail.jpg
         fi
+      working-directory: ${{ steps.kernel.outputs.kernel-folder }}/out/arch/arm64/boot/
 
     - name: AnyKernel3
       if: success()
@@ -183,8 +184,7 @@ jobs:
       working-directory: ${{ steps.kernel.outputs.kernel-folder }}/out/arch/arm64/boot/
 
     - name: Upload AnyKernel ZIP to Telegram with AOSP Thumbnail (Chat 2)
-      if: success()
-      if: ${{ secrets.TELEGRAM_CHAT_ID_2 != '' }}
+      if: ${{ success() && secrets.TELEGRAM_CHAT_ID_2 != '' }}
       run: |
         curl -F chat_id="${{ secrets.TELEGRAM_CHAT_ID_2 }}" \
          -F document=@"${{ steps.kernel.outputs.kernel-folder }}/out/arch/arm64/boot/${{ steps.anykernel.outputs.zipname }}" \
