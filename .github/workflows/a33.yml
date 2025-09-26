@@ -1,3 +1,4 @@
+
 name: a33
 
 on:
@@ -28,7 +29,6 @@ jobs:
   build:
     if: github.event.repository.owner.id == github.event.sender.id
     runs-on: ubuntu-latest
-    environment: Telegram
     permissions:
       contents: write
     steps:
@@ -41,31 +41,11 @@ jobs:
         echo "Upload to Release: ${{ github.event.inputs.UPLOAD_TO_RELEASE }}"
         echo "::endgroup::"
 
-    - name: Debug Secrets
-      run: |
-        echo "TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}"
-        echo "TELEGRAM_CHAT_ID_2: ${{ secrets.TELEGRAM_CHAT_ID_2 }}"
-        echo "TELEGRAM_TOKEN: ${{ secrets.TELEGRAM_TOKEN }}"
-
     - name: Generate Build Date
       id: build_date
       run: |
         build_date=$(date +"%Y%m%d")
         echo "build_date=$build_date" >> $GITHUB_OUTPUT
-
-    - name: Notify Build Start
-      uses: appleboy/telegram-action@master
-      with:
-        to: ${{ secrets.TELEGRAM_CHAT_ID }}
-        token: ${{ secrets.TELEGRAM_TOKEN }}
-        format: html
-        message: |
-          <a href="https://raw.githubusercontent.com/AlirezaParsi/pocof3/refs/heads/base/Rich%20deep%20teal%2C%20overhead%20bird%E2%80%99s%20eye%20view%20banner%20for%20ALP%20Kernel%2C%20a%20Linux%20kernel.%20Logo%20incorporated%2C%20top-down%20perspective%2C%20luxurious%20and%20vibrant%20color.%20Social%20media%20post%20banner.jpg">‌</a> <b>Kernel Build Started</b> 🚀
-          🔧 <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Workflow Run</a>
-          <b>📦 Build Title</b>: <code>${{ github.event.inputs.BUILD_TITLE || github.event.inputs.CODENAME }}</code>
-          <b>📱 Device Codename</b>: <code>${{ github.event.inputs.CODENAME }}</code>
-          <b>🏷️ Build Type</b>: ${{ github.event.inputs.UPLOAD_TO_RELEASE == 'true' && 'Release Build' || 'CI Build' }}
-          <b>📄 Workflow File</b>: ${{ github.workflow }}.yml
 
     - name: Initialize workspace
       run: |
@@ -79,7 +59,7 @@ jobs:
     - name: Prepare the build environment
       run: |
         sudo apt update -y
-        sudo apt install -y flex bison libncurses-dev libssl-dev bc build-essential git imagemagick
+        sudo apt install -y flex bison libncurses-dev libssl-dev bc build-essential git
         wget https://android.googlesource.com/platform/prebuilts/clang/host/linux-x86/+archive/refs/heads/main/clang-r547379.tar.gz -O clang.tar.gz
         mkdir clang
         tar -xf clang.tar.gz -C clang
@@ -109,15 +89,6 @@ jobs:
         echo "elapsed_time=$(echo "$(date +%s)"-"${{ steps.workspace.outputs.start_time }}" | bc)" >> $GITHUB_OUTPUT
       working-directory: ${{ steps.kernel.outputs.kernel-folder }}
       id: build
-
-    - name: Download and Prepare Thumbnails
-      run: |
-        curl -o aosp_thumbnail.jpg "https://raw.githubusercontent.com/AlirezaParsi/pocof3/refs/heads/base/thumbnail.jpg" || echo "Thumbnail not found, skipping..."
-        if [ -f aosp_thumbnail.jpg ]; then
-          convert aosp_thumbnail.jpg -resize 320x320 -quality 80 -format jpg aosp_thumbnail.jpg
-          identify aosp_thumbnail.jpg
-        fi
-      working-directory: ${{ steps.kernel.outputs.kernel-folder }}/out/arch/arm64/boot/
 
     - name: AnyKernel3
       if: success()
@@ -151,97 +122,15 @@ jobs:
         name: ${{ github.event.inputs.CODENAME }}-${{ steps.build_date.outputs.build_date }}
         tag_name: ${{ github.event.inputs.CODENAME }}-${{ steps.build_date.outputs.build_date }}
         body: |
-          <a href="https://raw.githubusercontent.com/AlirezaParsi/pocof3/refs/heads/base/Rich%20deep%20teal%2C%20overhead%20bird%E2%80%99s%20eye%20view%20banner%20for%20ALP%20Kernel%2C%20a%20Linux%20kernel.%20Logo%20incorporated%2C%20top-down%20perspective%2C%20luxurious%20and%20vibrant%20color.%20Social%20media%20post%20banner.jpg">‌</a> <b>Kernel Build Succeeded</b> ✅
+          <b>Kernel Build Succeeded</b> ✅
           <b>${{ steps.workspace.outputs.build_title }}</b>
           <b>Kernel successfully built!</b>, took ${{ steps.build.outputs.elapsed_time }} seconds.
           <b>📱 Device Codename</b>: <code>${{ github.event.inputs.CODENAME }}</code>
           <b>Kernel tree</b>: ${{ github.event.inputs.KERNEL_TREE }}/tree/${{ github.event.inputs.KERNEL_TREE_BRANCH }}
           <b>Action</b>: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          <b>Workflow File</b>: ${{ github.workflow }}.yml
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       id: upload_release
-
-    - name: Determine Build Tag
-      id: build_tag
-      run: |
-        if ${{ github.event.inputs.UPLOAD_TO_RELEASE == 'true' }}; then
-          build_tag="#release"
-        else
-          build_tag="#CI"
-        fi
-        echo "build_tag=$build_tag" >> $GITHUB_OUTPUT
-
-    - name: Upload AnyKernel ZIP to Telegram with AOSP Thumbnail (Chat 1)
-      if: success()
-      run: |
-        curl -F chat_id="${{ secrets.TELEGRAM_CHAT_ID }}" \
-         -F document=@"${{ steps.kernel.outputs.kernel-folder }}/out/arch/arm64/boot/${{ steps.anykernel.outputs.zipname }}" \
-         -F thumb=@"aosp_thumbnail.jpg" \
-         -F caption="#ALPKernel #a33x ${{ steps.build_tag.outputs.build_tag }}"$'\n'"<a href='https://t.me/ALPkernel/128'>flashing guide</a>" \
-         -F parse_mode="HTML" \
-         https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument
-      working-directory: ${{ steps.kernel.outputs.kernel-folder }}/out/arch/arm64/boot/
-
-    - name: Upload AnyKernel ZIP to Telegram with AOSP Thumbnail (Chat 2)
-      if: ${{ success() && secrets.TELEGRAM_CHAT_ID_2 != '' }}
-      run: |
-        curl -F chat_id="${{ secrets.TELEGRAM_CHAT_ID_2 }}" \
-         -F document=@"${{ steps.kernel.outputs.kernel-folder }}/out/arch/arm64/boot/${{ steps.anykernel.outputs.zipname }}" \
-         -F thumb=@"aosp_thumbnail.jpg" \
-         -F caption="#ALPKernel #a33x ${{ steps.build_tag.outputs.build_tag }}"$'\n'"<a href='https://t.me/ALPkernel/128'>flashing guide</a>" \
-         -F parse_mode="HTML" \
-         https://api.telegram.org/bot${{ secrets.TELEGRAM_TOKEN }}/sendDocument
-      working-directory: ${{ steps.kernel.outputs.kernel-folder }}/out/arch/arm64/boot/
-
-    - name: Send Success Notification
-      if: success()
-      uses: appleboy/telegram-action@master
-      with:
-        to: ${{ secrets.TELEGRAM_CHAT_ID }}
-        token: ${{ secrets.TELEGRAM_TOKEN }}
-        format: html
-        message: |
-          <a href="https://raw.githubusercontent.com/AlirezaParsi/pocof3/refs/heads/base/Rich%20deep%20teal%2C%20overhead%20bird%E2%80%99s%20eye%20view%20banner%20for%20ALP%20Kernel%2C%20a%20Linux%20kernel.%20Logo%20incorporated%2C%20top-down%20perspective%2C%20luxurious%20and%20vibrant%20color.%20Social%20media%20post%20banner.jpg">‌</a> <b>Kernel Build Succeeded</b> ✅
-          🔧 <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Workflow Run</a>
-          <b>📦 Build Title</b>: <code>${{ steps.workspace.outputs.build_title }}</code>
-          <b>📱 Device Codename</b>: <code>${{ github.event.inputs.CODENAME }}</code>
-          <b>🏷️ Build Type</b>: ${{ github.event.inputs.UPLOAD_TO_RELEASE == 'true' && 'Release Build' || 'CI Build' }}
-          <b>📄 File</b>:
-          - <code>${{ steps.anykernel.outputs.zipname }}</code>
-          ${{ github.event.inputs.UPLOAD_TO_RELEASE == 'true' && format('📥 <b>Download Link</b>: <a href="{1}/{2}/releases/tag/{3}-{4}">Release {0}</a>', steps.build_date.outputs.build_date, github.server_url, github.repository, github.event.inputs.CODENAME, steps.build_date.outputs.build_date) || '' }}
-
-    - name: Notify Build Failure
-      if: failure()
-      uses: appleboy/telegram-action@master
-      with:
-        to: ${{ secrets.TELEGRAM_CHAT_ID }}
-        token: ${{ secrets.TELEGRAM_TOKEN }}
-        format: html
-        message: |
-          <a href="https://raw.githubusercontent.com/AlirezaParsi/pocof3/refs/heads/base/Rich%20deep%20teal%2C%20overhead%20bird%E2%80%99s%20eye%20view%20banner%20for%20ALP%20Kernel%2C%20a%20Linux%20kernel.%20Logo%20incorporated%2C%20top-down%20perspective%2C%20luxurious%20and%20vibrant%20color.%20Social%20media%20post%20banner.jpg">‌</a> <b>Kernel Build Failed</b> ❌
-          🔧 <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Workflow Run</a>
-          <b>⏱️ Elapsed Time</b>: <code>${{ steps.build.outputs.elapsed_time }}</code> seconds
-          <b>📦 Build Title</b>: <code>${{ steps.workspace.outputs.build_title }}</code>
-          <b>📱 Device Codename</b>: <code>${{ github.event.inputs.CODENAME }}</code>
-          <b>🏷️ Build Type</b>: ${{ github.event.inputs.UPLOAD_TO_RELEASE == 'true' && 'Release Build' || 'CI Build' }}
-          <b>📄 Workflow File</b>: ${{ github.workflow }}.yml
-
-    - name: Notify Build Canceled
-      if: cancelled()
-      uses: appleboy/telegram-action@master
-      with:
-        to: ${{ secrets.TELEGRAM_CHAT_ID }}
-        token: ${{ secrets.TELEGRAM_TOKEN }}
-        format: html
-        message: |
-          <a href="https://raw.githubusercontent.com/AlirezaParsi/pocof3/refs/heads/base/Rich%20deep%20teal%2C%20overhead%20bird%E2%80%99s%20eye%20view%20banner%20for%20ALP%20Kernel%2C%20a%20Linux%20kernel.%20Logo%20incorporated%2C%20top-down%20perspective%2C%20luxurious%20and%20vibrant%20color.%20Social%20media%20post%20banner.jpg">‌</a> <b>Kernel Build Canceled</b> 🚫
-          🔧 <a href="${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}">View Workflow Run</a>
-          <b>📦 Build Title</b>: <code>${{ steps.workspace.outputs.build_title }}</code>
-          <b>📱 Device Codename</b>: <code>${{ github.event.inputs.CODENAME }}</code>
-          <b>🏷️ Build Type</b>: ${{ github.event.inputs.UPLOAD_TO_RELEASE == 'true' && 'Release Build' || 'CI Build' }}
-          <b>📄 Workflow File</b>: ${{ github.workflow }}.yml
-          <b>👤 Canceled by</b>: <a href="${{ github.server_url }}/${{ github.actor }}">${{ github.actor }}</a>
 
     - uses: actions/upload-artifact@v4
       if: ${{ success() && github.event.inputs.UPLOAD_TO_RELEASE != 'true' }}
