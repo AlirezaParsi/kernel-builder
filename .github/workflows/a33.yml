@@ -1,4 +1,4 @@
-name: alioth-v2
+name: a33
 
 on:
   pull_request:
